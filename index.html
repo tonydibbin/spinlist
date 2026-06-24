@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SpinList · DJ Song Requests</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0c0a1a; --bg2:#15102e; --panel:#1c1640; --panel2:#241a52;
+    --line:#34295f; --text:#f3f0ff; --muted:#a99fd4; --muted2:#7d72ad;
+    --accent:#ff3d8b; --accent2:#7c4dff; --gold:#ffcb47; --green:#2ee6a6;
+    --shadow:0 12px 40px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+    background:radial-gradient(1200px 600px at 80% -10%, #2a1b5e 0%, transparent 60%),
+               radial-gradient(900px 500px at -10% 110%, #5e1b46 0%, transparent 55%),
+               var(--bg);
+    color:var(--text); min-height:100vh; line-height:1.45;
+  }
+  a{color:inherit}
+  .wrap{max-width:920px;margin:0 auto;padding:22px 18px 80px}
+  header.app{display:flex;align-items:center;gap:12px;padding:6px 2px 18px;cursor:pointer}
+  .logo{font-size:26px;font-weight:800;letter-spacing:-.5px;
+    background:linear-gradient(90deg,var(--accent),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .logo .disc{ -webkit-text-fill-color:initial}
+  .tag{color:var(--muted);font-size:13px;margin-left:auto}
+  .card{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);
+    border-radius:16px;padding:20px;box-shadow:var(--shadow);margin-bottom:16px}
+  h1{font-size:22px;margin:0 0 4px}
+  h2{font-size:17px;margin:0 0 12px}
+  p.sub{color:var(--muted);margin:0 0 16px;font-size:14px}
+  label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 0 6px}
+  input,select{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line);
+    background:#120e2b;color:var(--text);font-size:15px;outline:none}
+  input:focus,select:focus{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(124,77,255,.25)}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .row > div{flex:1;min-width:140px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;border:none;
+    border-radius:10px;padding:12px 18px;font-size:15px;font-weight:600;color:#fff;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));transition:transform .08s ease,filter .15s}
+  .btn:hover{filter:brightness(1.08)} .btn:active{transform:translateY(1px)}
+  .btn.sec{background:#241a52;border:1px solid var(--line)}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+  .btn.sm{padding:8px 12px;font-size:13px}
+  .btn.gold{background:linear-gradient(90deg,var(--gold),#ff9a3d);color:#3a2a00}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .muted{color:var(--muted)} .tiny{font-size:12px}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.5px}
+  .pill.prom{background:rgba(124,77,255,.2);color:#c3b0ff}
+  .pill.wedding{background:rgba(46,230,166,.15);color:#83f3cf}
+  .pill.birthday{background:rgba(255,203,71,.16);color:#ffd98a}
+  .pill.party{background:rgba(255,61,139,.16);color:#ff9cc2}
+  .event-item{display:flex;align-items:center;gap:14px;padding:14px;border:1px solid var(--line);
+    border-radius:12px;background:#160f36;margin-bottom:10px;cursor:pointer;transition:border-color .15s}
+  .event-item:hover{border-color:var(--accent2)}
+  .event-item .meta{flex:1;min-width:0}
+  .event-item h3{margin:0;font-size:16px}
+  .count-badge{background:#241a52;border:1px solid var(--line);border-radius:10px;padding:6px 12px;
+    text-align:center;min-width:54px}
+  .count-badge b{display:block;font-size:18px;color:var(--gold)}
+  .empty{text-align:center;padding:34px 16px;color:var(--muted)}
+  .empty .big{font-size:40px;margin-bottom:8px}
+  /* search results */
+  .results{margin-top:10px;display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto}
+  .track{display:flex;align-items:center;gap:12px;padding:8px;border-radius:10px;background:#160f36;border:1px solid var(--line)}
+  .track img{width:46px;height:46px;border-radius:8px;object-fit:cover;background:#241a52;flex-shrink:0}
+  .track .info{flex:1;min-width:0}
+  .track .info b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+  .track .info span{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+  /* queue */
+  .queue{display:flex;flex-direction:column;gap:10px}
+  .qitem{display:flex;align-items:center;gap:12px;padding:10px;border-radius:12px;background:#160f36;border:1px solid var(--line)}
+  .qitem.played{opacity:.5}
+  .qitem .rank{font-size:18px;font-weight:800;color:var(--muted2);width:26px;text-align:center}
+  .qitem img{width:48px;height:48px;border-radius:8px;object-fit:cover;background:#241a52}
+  .qitem .info{flex:1;min-width:0}
+  .qitem .info b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qitem .info span{color:var(--muted);font-size:12px}
+  .votebox{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:58px}
+  .votebox .v{font-size:20px;font-weight:800;color:var(--gold);line-height:1}
+  .votebox .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(120%);
+    background:var(--green);color:#06281d;font-weight:700;padding:12px 22px;border-radius:999px;
+    box-shadow:var(--shadow);transition:transform .3s cubic-bezier(.2,1.3,.5,1);z-index:50}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+  .modal-bg{position:fixed;inset:0;background:rgba(6,4,18,.72);display:flex;align-items:center;
+    justify-content:center;padding:20px;z-index:40}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;max-width:380px;width:100%;text-align:center;box-shadow:var(--shadow)}
+  #qrcode{display:flex;justify-content:center;margin:16px 0;background:#fff;padding:14px;border-radius:12px}
+  .linkbox{display:flex;gap:8px;margin-top:10px}
+  .linkbox input{font-size:12px}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  .toolbar .spacer{flex:1}
+  .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{background:transparent;border:none;color:var(--muted);padding:9px 14px;cursor:pointer;font-size:13px;font-weight:600}
+  .seg button.active{background:var(--accent2);color:#fff}
+  .banner{background:rgba(124,77,255,.12);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--muted);margin-bottom:16px}
+  .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:s .7s linear infinite;vertical-align:-3px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  footer{text-align:center;color:var(--muted2);font-size:12px;margin-top:30px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="app" onclick="go('#/')">
+    <div class="logo"><span class="disc">🎧</span> SpinList</div>
+    <div class="tag" id="modeTag"></div>
+  </header>
+  <main id="view"></main>
+  <footer>SpinList · prototype · data is saved in this browser</footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- storage ---------------- */
+const KEY='spinlist_v1';
+function load(){ try{return JSON.parse(localStorage.getItem(KEY))||{events:{}}}catch(e){return {events:{}}} }
+function save(d){ localStorage.setItem(KEY, JSON.stringify(d)); }
+let DB = load();
+function uid(){ return Math.random().toString(36).slice(2,8); }
+function eid(){ // short, URL-friendly event code, collision-checked
+  let c; do{ c=Math.random().toString(36).slice(2,6); }while(DB.events[c]); return c; }
+function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ---------------- toast ---------------- */
+let toastT;
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1900);
+}
+
+/* ---------------- routing ---------------- */
+function go(hash){ if(location.hash===hash) render(); else location.hash=hash; }
+window.addEventListener('hashchange', render);
+
+function parseRoute(){
+  // Compact scheme:  #            -> home
+  //                  #dj/CODE     -> DJ console
+  //                  #CODE        -> guest request page (shortest possible)
+  const h=location.hash.replace(/^#/,'');
+  if(!h || h==='/' || h==='home') return {name:'home'};
+  if(h.startsWith('dj/')) return {name:'dj', eventId:h.slice(3)};
+  return {name:'request', eventId:h};
+}
+
+/* ---------------- views ---------------- */
+function render(){
+  DB=load();
+  const r=parseRoute();
+  const v=document.getElementById('view');
+  const tag=document.getElementById('modeTag');
+  if(r.name==='home'){ tag.textContent='DJ Dashboard'; v.innerHTML=homeView(); bindHome(); }
+  else{
+    const ev=DB.events[r.eventId];
+    if(!ev){ v.innerHTML=`<div class="card empty"><div class="big">🔍</div>Event not found.<br><br><button class="btn" onclick="go('#/')">Back to dashboard</button></div>`; tag.textContent=''; return; }
+    if(r.name==='request'){ tag.textContent='Guest Requests'; v.innerHTML=guestView(ev); bindGuest(ev); }
+    else{ tag.textContent='DJ Console'; v.innerHTML=djView(ev); bindDj(ev); }
+  }
+}
+
+/* ---------- HOME / DASHBOARD ---------- */
+function homeView(){
+  const evs=Object.values(DB.events).sort((a,b)=>b.createdAt-a.createdAt);
+  const list = evs.length ? evs.map(e=>{
+    const n=e.requests.length, votes=e.requests.reduce((s,r)=>s+r.votes,0);
+    return `<div class="event-item" onclick="go('#dj/${e.id}')">
+      <span class="pill ${e.type}">${e.type}</span>
+      <div class="meta"><h3>${esc(e.name)}</h3>
+        <div class="tiny muted">${e.date?esc(e.date)+' · ':''}${n} song${n!==1?'s':''} · ${votes} vote${votes!==1?'s':''}</div></div>
+      <div class="count-badge"><b>${n}</b><span class="tiny muted">tracks</span></div>
+    </div>`;
+  }).join('') : `<div class="empty"><div class="big">🎉</div>No events yet. Create your first one below.</div>`;
+
+  return `
+  <div class="card">
+    <h1>Your events</h1>
+    <p class="sub">Each prom, wedding or party gets its own request page and QR code.</p>
+    ${list}
+  </div>
+  <div class="card">
+    <h2>➕ New event</h2>
+    <div class="row">
+      <div><label>Event name</label><input id="evName" placeholder="e.g. Lincoln High Prom 2026"/></div>
+      <div style="max-width:170px"><label>Type</label>
+        <select id="evType">
+          <option value="prom">Prom</option>
+          <option value="wedding">Wedding</option>
+          <option value="birthday">Birthday</option>
+          <option value="party">Party</option>
+        </select>
+      </div>
+      <div style="max-width:170px"><label>Date</label><input id="evDate" type="date"/></div>
+    </div>
+    <div style="margin-top:14px"><button class="btn" id="createBtn">Create event</button></div>
+  </div>`;
+}
+function bindHome(){
+  document.getElementById('createBtn').onclick=()=>{
+    const name=document.getElementById('evName').value.trim();
+    if(!name){ toast('Give the event a name'); return; }
+    const id=eid();
+    DB.events[id]={id,name,type:document.getElementById('evType').value,
+      date:document.getElementById('evDate').value,createdAt:Date.now(),requests:[]};
+    save(DB); go('#dj/'+id);
+  };
+}
+
+/* ---------- DJ CONSOLE ---------- */
+function djView(ev){
+  const sorted=sortReqs(ev.requests);
+  const pending=sorted.filter(r=>!r.played), played=sorted.filter(r=>r.played);
+  const guestLink=location.origin+location.pathname+'#'+ev.id;
+  return `
+  <div class="card">
+    <div class="toolbar">
+      <button class="btn sec sm" onclick="go('#/')">← All events</button>
+      <span class="pill ${ev.type}">${ev.type}</span>
+      <div class="spacer"></div>
+      <button class="btn gold sm" id="pdfBtn">⬇ Top 20 PDF</button>
+      <button class="btn sm" id="shareBtn">📱 Share / QR</button>
+    </div>
+    <h1>${esc(ev.name)}</h1>
+    <p class="sub">${ev.date?esc(ev.date)+' · ':''}${ev.requests.length} requests · ${ev.requests.reduce((s,r)=>s+r.votes,0)} total votes · ranked by popularity</p>
+    <div class="banner">Guests open this link to request songs: <b>${esc(guestLink)}</b></div>
+  </div>
+  <div class="card">
+    <h2>🔥 Request queue</h2>
+    ${pending.length? `<div class="queue">${pending.map((r,i)=>qRow(ev,r,i+1,true)).join('')}</div>`
+       : `<div class="empty"><div class="big">🎶</div>No requests yet. Share the QR code to get started.</div>`}
+  </div>
+  ${played.length?`<div class="card"><h2>✅ Played (${played.length})</h2><div class="queue">${played.map((r,i)=>qRow(ev,r,i+1,true)).join('')}</div></div>`:''}`;
+}
+function qRow(ev,r,rank,dj){
+  return `<div class="qitem ${r.played?'played':''}">
+    <div class="rank">${rank}</div>
+    <img src="${esc(r.artwork||'')}" alt="" onerror="this.style.visibility='hidden'"/>
+    <div class="info"><b>${esc(r.trackName)}</b><span>${esc(r.artist)}</span></div>
+    <div class="votebox"><span class="v">${r.votes}</span><span class="l">votes</span></div>
+    ${dj?`<button class="btn ${r.played?'ghost':'sec'} sm" onclick="togglePlayed('${ev.id}','${r.id}')">${r.played?'Undo':'Played'}</button>
+       <button class="btn ghost sm" onclick="delReq('${ev.id}','${r.id}')">✕</button>`:''}
+  </div>`;
+}
+function bindDj(ev){
+  document.getElementById('shareBtn').onclick=()=>showShare(ev);
+  document.getElementById('pdfBtn').onclick=()=>exportPDF(ev);
+}
+function togglePlayed(eid,rid){ const r=DB.events[eid].requests.find(x=>x.id===rid); r.played=!r.played; save(DB); render(); }
+function delReq(eid,rid){ DB.events[eid].requests=DB.events[eid].requests.filter(x=>x.id!==rid); save(DB); render(); }
+
+/* ---------- GUEST VIEW ---------- */
+function guestView(ev){
+  const sorted=sortReqs(ev.requests).filter(r=>!r.played);
+  return `
+  <div class="card">
+    <span class="pill ${ev.type}">${ev.type}</span>
+    <h1 style="margin-top:8px">${esc(ev.name)}</h1>
+    <p class="sub">Request a song for tonight 🎉 Search below, then tap to add. Already requested? Give it a vote!</p>
+    <label>Search for a song or artist</label>
+    <input id="q" placeholder="Type a song or artist…" autocomplete="off"/>
+    <div class="results" id="results"></div>
+  </div>
+  <div class="card">
+    <h2>🔥 Most requested right now</h2>
+    ${sorted.length? `<div class="queue" id="leader">${sorted.map((r,i)=>guestRow(ev,r,i+1)).join('')}</div>`
+      : `<div class="empty"><div class="big">🎶</div>Be the first to request a song!</div>`}
+  </div>`;
+}
+function guestRow(ev,r,rank){
+  return `<div class="qitem">
+    <div class="rank">${rank}</div>
+    <img src="${esc(r.artwork||'')}" alt="" onerror="this.style.visibility='hidden'"/>
+    <div class="info"><b>${esc(r.trackName)}</b><span>${esc(r.artist)}</span></div>
+    <div class="votebox"><span class="v">${r.votes}</span><span class="l">votes</span></div>
+    <button class="btn gold sm" onclick="upvote('${ev.id}','${r.id}')">▲ Vote</button>
+  </div>`;
+}
+function bindGuest(ev){
+  const q=document.getElementById('q'); const box=document.getElementById('results');
+  let t;
+  q.oninput=()=>{
+    clearTimeout(t); const term=q.value.trim();
+    if(term.length<2){ box.innerHTML=''; return; }
+    box.innerHTML='<div class="muted tiny" style="padding:8px"><span class="spin"></span> Searching the music catalog…</div>';
+    t=setTimeout(()=>searchTracks(term,box,ev),320);
+  };
+  q.focus();
+}
+function upvote(eid,rid){ const r=DB.events[eid].requests.find(x=>x.id===rid); r.votes++; save(DB); toast('Voted! 🔥'); render(); document.getElementById('q')&&document.getElementById('q').focus(); }
+
+/* ---------- SONG SEARCH (Apple iTunes catalog: free, no key, CORS-enabled) ----------
+   To swap for the real Spotify Web API later: replace searchTracks() with a call to
+   /v1/search via your backend (Spotify requires a server-held client secret).        */
+async function searchTracks(term,box,ev){
+  try{
+    const url='https://itunes.apple.com/search?media=music&entity=song&limit=12&term='+encodeURIComponent(term);
+    const res=await fetch(url); const data=await res.json();
+    if(!data.results||!data.results.length){ box.innerHTML='<div class="muted tiny" style="padding:8px">No matches — try another spelling.</div>'; return; }
+    box.innerHTML=data.results.map(tr=>{
+      const art=(tr.artworkUrl100||'').replace('100x100','200x200');
+      const name=esc(tr.trackName), artist=esc(tr.artistName);
+      return `<div class="track">
+        <img src="${art}" alt="" onerror="this.style.visibility='hidden'"/>
+        <div class="info"><b>${name}</b><span>${artist}</span></div>
+        <button class="btn sm" onclick='addReq("${ev.id}",${JSON.stringify({trackName:tr.trackName,artist:tr.artistName,artwork:art}).replace(/'/g,"&#39;")})'>+ Add</button>
+      </div>`;
+    }).join('');
+  }catch(e){ box.innerHTML='<div class="muted tiny" style="padding:8px">Search unavailable — check your connection.</div>'; }
+}
+function addReq(eid,track){
+  const ev=DB.events[eid];
+  const norm=s=>(s||'').toLowerCase().trim();
+  const existing=ev.requests.find(r=>norm(r.trackName)===norm(track.trackName)&&norm(r.artist)===norm(track.artist));
+  if(existing){ existing.votes++; toast('Already requested — added your vote! 🔥'); }
+  else{ ev.requests.push({id:uid(),trackName:track.trackName,artist:track.artist,artwork:track.artwork,votes:1,played:false,createdAt:Date.now()}); toast('Added to the queue! 🎶'); }
+  save(DB); render();
+  const q=document.getElementById('q'); if(q){ q.value=''; document.getElementById('results').innerHTML=''; q.focus(); }
+}
+
+/* ---------- sort: popularity first, then earliest ---------- */
+function sortReqs(reqs){ return [...reqs].sort((a,b)=> b.votes-a.votes || a.createdAt-b.createdAt); }
+
+/* ---------- SHARE / QR ---------- */
+function showShare(ev){
+  const link=location.origin+location.pathname+'#'+ev.id;
+  const bg=document.createElement('div'); bg.className='modal-bg';
+  bg.onclick=e=>{ if(e.target===bg) bg.remove(); };
+  bg.innerHTML=`<div class="modal">
+    <h2>Scan to request songs</h2>
+    <p class="tiny muted">Guests scan this with their phone camera.</p>
+    <div id="qrcode"></div>
+    <div class="linkbox"><input id="shareLink" value="${esc(link)}" readonly/><button class="btn sm" id="copyLink">Copy</button></div>
+    <p class="tiny muted" style="margin-top:14px">Note: for phones to open this, the file needs to be hosted online (not opened from your hard drive). On this computer you can test it via the Guest view button.</p>
+    <div style="margin-top:14px"><button class="btn sec sm" onclick="this.closest('.modal-bg').remove()">Close</button>
+    <button class="btn sm" onclick="go('#${ev.id}')">Open Guest view →</button></div>
+  </div>`;
+  document.body.appendChild(bg);
+  new QRCode(document.getElementById('qrcode'),{text:link,width:200,height:200,colorDark:'#15102e',colorLight:'#ffffff'});
+  document.getElementById('copyLink').onclick=()=>{ const i=document.getElementById('shareLink'); i.select(); document.execCommand('copy'); toast('Link copied'); };
+}
+
+/* ---------- PDF: Top 20 unique most-requested ---------- */
+function exportPDF(ev){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'pt',format:'a4'});
+  const W=doc.internal.pageSize.getWidth();
+  const top=sortReqs(ev.requests).slice(0,20);
+  // header band
+  doc.setFillColor(21,16,46); doc.rect(0,0,W,90,'F');
+  doc.setTextColor(255,61,139); doc.setFont('helvetica','bold'); doc.setFontSize(22);
+  doc.text('Top 20 Most-Requested Songs', 40, 46);
+  doc.setTextColor(180,170,220); doc.setFont('helvetica','normal'); doc.setFontSize(12);
+  doc.text(`${ev.name}${ev.date?'  ·  '+ev.date:''}`, 40, 68);
+  const stamp=new Date().toLocaleString();
+  doc.setFontSize(9); doc.setTextColor(150,140,190);
+  doc.text('Generated '+stamp, 40, 82);
+
+  let y=120;
+  doc.setFontSize(11);
+  if(!top.length){
+    doc.setTextColor(80,80,80); doc.text('No requests recorded for this event yet.',40,y);
+  }
+  top.forEach((r,i)=>{
+    if(y>770){ doc.addPage(); y=60; }
+    // rank
+    doc.setTextColor(124,77,255); doc.setFont('helvetica','bold'); doc.setFontSize(13);
+    doc.text(String(i+1).padStart(2,'0'), 40, y);
+    // title + artist
+    doc.setTextColor(30,25,55); doc.setFontSize(12);
+    doc.text(trunc(doc,r.trackName,300), 80, y);
+    doc.setTextColor(120,110,150); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.text(trunc(doc,r.artist,300), 80, y+14);
+    // votes
+    doc.setTextColor(230,150,40); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+    doc.text(`${r.votes} vote${r.votes!==1?'s':''}`, W-40, y, {align:'right'});
+    // divider
+    doc.setDrawColor(225,222,235); doc.line(40,y+24,W-40,y+24);
+    y+=40;
+  });
+  const safe=ev.name.replace(/[^a-z0-9]+/gi,'_').replace(/^_|_$/g,'')||'event';
+  doc.save(`Top20_${safe}.pdf`);
+  toast('PDF downloaded');
+}
+function trunc(doc,str,maxw){ str=str||''; while(doc.getTextWidth(str)>maxw&&str.length>3){ str=str.slice(0,-2); } return str.length<(arguments[1]||'').length?str+'…':str; }
+
+/* ---------- init + seed demo on very first load ---------- */
+(function(){
+  if(!Object.keys(DB.events).length && !localStorage.getItem(KEY)){
+    // leave empty; user creates their own
+  }
+  if(!location.hash) location.hash='#/';
+  render();
+})();
+</script>
+</body>
+</html>
