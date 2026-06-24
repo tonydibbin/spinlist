@@ -6,6 +6,7 @@
 <title>SpinList · DJ Song Requests</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --bg:#0c0a1a; --bg2:#15102e; --panel:#1c1640; --panel2:#241a52;
@@ -28,7 +29,10 @@
   .logo{font-size:26px;font-weight:800;letter-spacing:-.5px;
     background:linear-gradient(90deg,var(--accent),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
   .logo .disc{ -webkit-text-fill-color:initial}
-  .tag{color:var(--muted);font-size:13px;margin-left:auto}
+  .tag{color:var(--muted);font-size:13px;margin-left:auto;display:flex;align-items:center;gap:8px}
+  .live{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--green);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+  .live .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(46,230,166,.6);animation:pulse 1.8s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(46,230,166,.5)}70%{box-shadow:0 0 0 7px rgba(46,230,166,0)}100%{box-shadow:0 0 0 0 rgba(46,230,166,0)}}
   .card{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);
     border-radius:16px;padding:20px;box-shadow:var(--shadow);margin-bottom:16px}
   h1{font-size:22px;margin:0 0 4px}
@@ -66,14 +70,12 @@
   .count-badge b{display:block;font-size:18px;color:var(--gold)}
   .empty{text-align:center;padding:34px 16px;color:var(--muted)}
   .empty .big{font-size:40px;margin-bottom:8px}
-  /* search results */
   .results{margin-top:10px;display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto}
   .track{display:flex;align-items:center;gap:12px;padding:8px;border-radius:10px;background:#160f36;border:1px solid var(--line)}
   .track img{width:46px;height:46px;border-radius:8px;object-fit:cover;background:#241a52;flex-shrink:0}
   .track .info{flex:1;min-width:0}
   .track .info b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
   .track .info span{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-  /* queue */
   .queue{display:flex;flex-direction:column;gap:10px}
   .qitem{display:flex;align-items:center;gap:12px;padding:10px;border-radius:12px;background:#160f36;border:1px solid var(--line)}
   .qitem.played{opacity:.5}
@@ -97,10 +99,7 @@
   .linkbox input{font-size:12px}
   .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
   .toolbar .spacer{flex:1}
-  .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-  .seg button{background:transparent;border:none;color:var(--muted);padding:9px 14px;cursor:pointer;font-size:13px;font-weight:600}
-  .seg button.active{background:var(--accent2);color:#fff}
-  .banner{background:rgba(124,77,255,.12);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--muted);margin-bottom:16px}
+  .banner{background:rgba(124,77,255,.12);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--muted);margin-bottom:16px;word-break:break-all}
   .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:s .7s linear infinite;vertical-align:-3px}
   @keyframes s{to{transform:rotate(360deg)}}
   footer{text-align:center;color:var(--muted2);font-size:12px;margin-top:30px}
@@ -113,20 +112,22 @@
     <div class="tag" id="modeTag"></div>
   </header>
   <main id="view"></main>
-  <footer>SpinList · prototype · data is saved in this browser</footer>
+  <footer>SpinList · live shared requests · synced across all devices</footer>
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
-/* ---------------- storage ---------------- */
-const KEY='spinlist_v1';
-function load(){ try{return JSON.parse(localStorage.getItem(KEY))||{events:{}}}catch(e){return {events:{}}} }
-function save(d){ localStorage.setItem(KEY, JSON.stringify(d)); }
-let DB = load();
-function uid(){ return Math.random().toString(36).slice(2,8); }
-function eid(){ // short, URL-friendly event code, collision-checked
-  let c; do{ c=Math.random().toString(36).slice(2,6); }while(DB.events[c]); return c; }
-function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+/* ---------------- Supabase backend ---------------- */
+const SUPABASE_URL='https://fpaearsmlkdqwggzgjao.supabase.co';
+const SUPABASE_KEY='sb_publishable_fZZuH09yA50Y_G8LtflNAA_lBZRaqFV';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const state = { events:[], event:null, requests:[] };
+let channel=null;
+
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function rand4(){ return Math.random().toString(36).slice(2,6); }
+function sortReqs(reqs){ return [...reqs].sort((a,b)=> b.votes-a.votes || (new Date(a.created_at)-new Date(b.created_at))); }
 
 /* ---------------- toast ---------------- */
 let toastT;
@@ -138,49 +139,80 @@ function toast(msg){
 /* ---------------- routing ---------------- */
 function go(hash){ if(location.hash===hash) render(); else location.hash=hash; }
 window.addEventListener('hashchange', render);
-
 function parseRoute(){
-  // Compact scheme:  #            -> home
-  //                  #dj/CODE     -> DJ console
-  //                  #CODE        -> guest request page (shortest possible)
   const h=location.hash.replace(/^#/,'');
   if(!h || h==='/' || h==='home') return {name:'home'};
   if(h.startsWith('dj/')) return {name:'dj', eventId:h.slice(3)};
   return {name:'request', eventId:h};
 }
 
-/* ---------------- views ---------------- */
-function render(){
-  DB=load();
+/* ---------------- realtime ---------------- */
+function unsubscribe(){ if(channel){ sb.removeChannel(channel); channel=null; } }
+function subscribe(eventId){
+  unsubscribe();
+  channel = sb.channel('ev-'+eventId)
+    .on('postgres_changes',{event:'*',schema:'public',table:'requests',filter:'event_id=eq.'+eventId}, syncLists)
+    .subscribe();
+}
+async function syncLists(){
+  if(!state.event) return;
+  const {data} = await sb.from('requests').select('*').eq('event_id',state.event.id);
+  state.requests = data||[];
+  const r=parseRoute();
+  if(r.name==='request') drawGuestList();
+  else if(r.name==='dj') drawDjLists();
+}
+
+/* ---------------- data loads ---------------- */
+async function loadHome(){
+  const {data}=await sb.from('events').select('id,name,type,date,created_at,requests(count)').order('created_at',{ascending:false});
+  state.events=data||[];
+}
+async function loadEvent(id){
+  const {data:ev}=await sb.from('events').select('*').eq('id',id).maybeSingle();
+  if(!ev){ state.event=null; state.requests=[]; return null; }
+  const {data:reqs}=await sb.from('requests').select('*').eq('event_id',id);
+  state.event=ev; state.requests=reqs||[];
+  return ev;
+}
+
+/* ---------------- render ---------------- */
+async function render(){
   const r=parseRoute();
   const v=document.getElementById('view');
   const tag=document.getElementById('modeTag');
-  if(r.name==='home'){ tag.textContent='DJ Dashboard'; v.innerHTML=homeView(); bindHome(); }
-  else{
-    const ev=DB.events[r.eventId];
-    if(!ev){ v.innerHTML=`<div class="card empty"><div class="big">🔍</div>Event not found.<br><br><button class="btn" onclick="go('#/')">Back to dashboard</button></div>`; tag.textContent=''; return; }
-    if(r.name==='request'){ tag.textContent='Guest Requests'; v.innerHTML=guestView(ev); bindGuest(ev); }
-    else{ tag.textContent='DJ Console'; v.innerHTML=djView(ev); bindDj(ev); }
+  if(r.name==='home'){
+    unsubscribe(); state.event=null;
+    tag.textContent='DJ Dashboard';
+    v.innerHTML='<div class="card empty"><span class="spin"></span> Loading…</div>';
+    await loadHome(); drawHome();
+    return;
   }
+  v.innerHTML='<div class="card empty"><span class="spin"></span> Loading…</div>';
+  const ev=await loadEvent(r.eventId);
+  if(!ev){ unsubscribe(); tag.innerHTML=''; v.innerHTML=`<div class="card empty"><div class="big">🔍</div>Event not found.<br><br><button class="btn" onclick="go('#/')">Back to dashboard</button></div>`; return; }
+  tag.innerHTML='<span class="live"><span class="dot"></span>Live</span>';
+  if(r.name==='request') drawGuest(); else drawDj();
+  subscribe(r.eventId);
 }
 
 /* ---------- HOME / DASHBOARD ---------- */
-function homeView(){
-  const evs=Object.values(DB.events).sort((a,b)=>b.createdAt-a.createdAt);
+function drawHome(){
+  const evs=state.events;
   const list = evs.length ? evs.map(e=>{
-    const n=e.requests.length, votes=e.requests.reduce((s,r)=>s+r.votes,0);
+    const n=(e.requests&&e.requests[0]&&e.requests[0].count)||0;
     return `<div class="event-item" onclick="go('#dj/${e.id}')">
-      <span class="pill ${e.type}">${e.type}</span>
+      <span class="pill ${esc(e.type)}">${esc(e.type)}</span>
       <div class="meta"><h3>${esc(e.name)}</h3>
-        <div class="tiny muted">${e.date?esc(e.date)+' · ':''}${n} song${n!==1?'s':''} · ${votes} vote${votes!==1?'s':''}</div></div>
+        <div class="tiny muted">${e.date?esc(e.date)+' · ':''}${n} song${n!==1?'s':''} · code ${esc(e.id)}</div></div>
       <div class="count-badge"><b>${n}</b><span class="tiny muted">tracks</span></div>
     </div>`;
   }).join('') : `<div class="empty"><div class="big">🎉</div>No events yet. Create your first one below.</div>`;
 
-  return `
+  document.getElementById('view').innerHTML=`
   <div class="card">
     <h1>Your events</h1>
-    <p class="sub">Each prom, wedding or party gets its own request page and QR code.</p>
+    <p class="sub">Each prom, wedding or party gets its own request page and QR code. Requests sync live across every device.</p>
     ${list}
   </div>
   <div class="card">
@@ -199,66 +231,85 @@ function homeView(){
     </div>
     <div style="margin-top:14px"><button class="btn" id="createBtn">Create event</button></div>
   </div>`;
+  document.getElementById('createBtn').onclick=createEvent;
 }
-function bindHome(){
-  document.getElementById('createBtn').onclick=()=>{
-    const name=document.getElementById('evName').value.trim();
-    if(!name){ toast('Give the event a name'); return; }
-    const id=eid();
-    DB.events[id]={id,name,type:document.getElementById('evType').value,
-      date:document.getElementById('evDate').value,createdAt:Date.now(),requests:[]};
-    save(DB); go('#dj/'+id);
-  };
+async function createEvent(){
+  const btn=document.getElementById('createBtn');
+  const name=document.getElementById('evName').value.trim();
+  if(!name){ toast('Give the event a name'); return; }
+  const type=document.getElementById('evType').value;
+  const date=document.getElementById('evDate').value||null;
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span> Creating…';
+  for(let i=0;i<5;i++){
+    const id=rand4();
+    const {error}=await sb.from('events').insert({id,name,type,date});
+    if(!error){ go('#dj/'+id); return; }
+    if(error.code!=='23505'){ console.error(error); toast('Could not create event'); break; }
+  }
+  btn.disabled=false; btn.textContent='Create event';
 }
 
 /* ---------- DJ CONSOLE ---------- */
-function djView(ev){
-  const sorted=sortReqs(ev.requests);
-  const pending=sorted.filter(r=>!r.played), played=sorted.filter(r=>r.played);
+function djHeaderStats(){
+  const total=state.requests.length, votes=state.requests.reduce((s,r)=>s+r.votes,0);
+  return `${state.event.date?esc(state.event.date)+' · ':''}${total} requests · ${votes} total votes · ranked by popularity`;
+}
+function drawDj(){
+  const ev=state.event;
   const guestLink=location.origin+location.pathname+'#'+ev.id;
-  return `
+  document.getElementById('view').innerHTML=`
   <div class="card">
     <div class="toolbar">
       <button class="btn sec sm" onclick="go('#/')">← All events</button>
-      <span class="pill ${ev.type}">${ev.type}</span>
+      <span class="pill ${esc(ev.type)}">${esc(ev.type)}</span>
       <div class="spacer"></div>
       <button class="btn gold sm" id="pdfBtn">⬇ Top 20 PDF</button>
       <button class="btn sm" id="shareBtn">📱 Share / QR</button>
     </div>
     <h1>${esc(ev.name)}</h1>
-    <p class="sub">${ev.date?esc(ev.date)+' · ':''}${ev.requests.length} requests · ${ev.requests.reduce((s,r)=>s+r.votes,0)} total votes · ranked by popularity</p>
+    <p class="sub" id="djStats">${djHeaderStats()}</p>
     <div class="banner">Guests open this link to request songs: <b>${esc(guestLink)}</b></div>
   </div>
   <div class="card">
     <h2>🔥 Request queue</h2>
-    ${pending.length? `<div class="queue">${pending.map((r,i)=>qRow(ev,r,i+1,true)).join('')}</div>`
-       : `<div class="empty"><div class="big">🎶</div>No requests yet. Share the QR code to get started.</div>`}
+    <div id="djQueue"></div>
   </div>
-  ${played.length?`<div class="card"><h2>✅ Played (${played.length})</h2><div class="queue">${played.map((r,i)=>qRow(ev,r,i+1,true)).join('')}</div></div>`:''}`;
+  <div class="card" id="djPlayedCard" style="display:none"><h2 id="djPlayedTitle"></h2><div id="djPlayed"></div></div>`;
+  document.getElementById('shareBtn').onclick=()=>showShare(ev);
+  document.getElementById('pdfBtn').onclick=()=>exportPDF(ev,state.requests);
+  drawDjLists();
 }
-function qRow(ev,r,rank,dj){
+function qRow(r,rank){
   return `<div class="qitem ${r.played?'played':''}">
     <div class="rank">${rank}</div>
     <img src="${esc(r.artwork||'')}" alt="" onerror="this.style.visibility='hidden'"/>
-    <div class="info"><b>${esc(r.trackName)}</b><span>${esc(r.artist)}</span></div>
+    <div class="info"><b>${esc(r.track_name)}</b><span>${esc(r.artist)}</span></div>
     <div class="votebox"><span class="v">${r.votes}</span><span class="l">votes</span></div>
-    ${dj?`<button class="btn ${r.played?'ghost':'sec'} sm" onclick="togglePlayed('${ev.id}','${r.id}')">${r.played?'Undo':'Played'}</button>
-       <button class="btn ghost sm" onclick="delReq('${ev.id}','${r.id}')">✕</button>`:''}
+    <button class="btn ${r.played?'ghost':'sec'} sm" onclick="togglePlayed('${r.id}',${r.played})">${r.played?'Undo':'Played'}</button>
+    <button class="btn ghost sm" onclick="delReq('${r.id}')">✕</button>
   </div>`;
 }
-function bindDj(ev){
-  document.getElementById('shareBtn').onclick=()=>showShare(ev);
-  document.getElementById('pdfBtn').onclick=()=>exportPDF(ev);
+function drawDjLists(){
+  const sorted=sortReqs(state.requests);
+  const pending=sorted.filter(r=>!r.played), played=sorted.filter(r=>r.played);
+  const q=document.getElementById('djQueue'); if(!q) return;
+  q.innerHTML = pending.length? `<div class="queue">${pending.map((r,i)=>qRow(r,i+1)).join('')}</div>`
+     : `<div class="empty"><div class="big">🎶</div>No requests yet. Share the QR code to get started.</div>`;
+  const pc=document.getElementById('djPlayedCard');
+  if(played.length){ pc.style.display=''; document.getElementById('djPlayedTitle').textContent=`✅ Played (${played.length})`;
+    document.getElementById('djPlayed').innerHTML=`<div class="queue">${played.map((r,i)=>qRow(r,i+1)).join('')}</div>`; }
+  else pc.style.display='none';
+  const st=document.getElementById('djStats'); if(st) st.textContent=djHeaderStats();
 }
-function togglePlayed(eid,rid){ const r=DB.events[eid].requests.find(x=>x.id===rid); r.played=!r.played; save(DB); render(); }
-function delReq(eid,rid){ DB.events[eid].requests=DB.events[eid].requests.filter(x=>x.id!==rid); save(DB); render(); }
+async function togglePlayed(rid,played){ await sb.from('requests').update({played:!played}).eq('id',rid); syncLists(); }
+async function delReq(rid){ await sb.from('requests').delete().eq('id',rid); syncLists(); }
 
 /* ---------- GUEST VIEW ---------- */
-function guestView(ev){
-  const sorted=sortReqs(ev.requests).filter(r=>!r.played);
-  return `
+function drawGuest(){
+  const ev=state.event;
+  document.getElementById('view').innerHTML=`
   <div class="card">
-    <span class="pill ${ev.type}">${ev.type}</span>
+    <span class="pill ${esc(ev.type)}">${esc(ev.type)}</span>
     <h1 style="margin-top:8px">${esc(ev.name)}</h1>
     <p class="sub">Request a song for tonight 🎉 Search below, then tap to add. Already requested? Give it a vote!</p>
     <label>Search for a song or artist</label>
@@ -267,35 +318,39 @@ function guestView(ev){
   </div>
   <div class="card">
     <h2>🔥 Most requested right now</h2>
-    ${sorted.length? `<div class="queue" id="leader">${sorted.map((r,i)=>guestRow(ev,r,i+1)).join('')}</div>`
-      : `<div class="empty"><div class="big">🎶</div>Be the first to request a song!</div>`}
+    <div id="leader"></div>
   </div>`;
-}
-function guestRow(ev,r,rank){
-  return `<div class="qitem">
-    <div class="rank">${rank}</div>
-    <img src="${esc(r.artwork||'')}" alt="" onerror="this.style.visibility='hidden'"/>
-    <div class="info"><b>${esc(r.trackName)}</b><span>${esc(r.artist)}</span></div>
-    <div class="votebox"><span class="v">${r.votes}</span><span class="l">votes</span></div>
-    <button class="btn gold sm" onclick="upvote('${ev.id}','${r.id}')">▲ Vote</button>
-  </div>`;
-}
-function bindGuest(ev){
-  const q=document.getElementById('q'); const box=document.getElementById('results');
-  let t;
+  const q=document.getElementById('q'); let t;
   q.oninput=()=>{
     clearTimeout(t); const term=q.value.trim();
+    const box=document.getElementById('results');
     if(term.length<2){ box.innerHTML=''; return; }
-    box.innerHTML='<div class="muted tiny" style="padding:8px"><span class="spin"></span> Searching the music catalog…</div>';
+    box.innerHTML='<div class="muted tiny" style="padding:8px"><span class="spin"></span> Searching the music catalogue…</div>';
     t=setTimeout(()=>searchTracks(term,box,ev),320);
   };
   q.focus();
+  drawGuestList();
 }
-function upvote(eid,rid){ const r=DB.events[eid].requests.find(x=>x.id===rid); r.votes++; save(DB); toast('Voted! 🔥'); render(); document.getElementById('q')&&document.getElementById('q').focus(); }
+function guestRow(r,rank){
+  return `<div class="qitem">
+    <div class="rank">${rank}</div>
+    <img src="${esc(r.artwork||'')}" alt="" onerror="this.style.visibility='hidden'"/>
+    <div class="info"><b>${esc(r.track_name)}</b><span>${esc(r.artist)}</span></div>
+    <div class="votebox"><span class="v">${r.votes}</span><span class="l">votes</span></div>
+    <button class="btn gold sm" onclick="upvote('${r.id}')">▲ Vote</button>
+  </div>`;
+}
+function drawGuestList(){
+  const el=document.getElementById('leader'); if(!el) return;
+  const sorted=sortReqs(state.requests).filter(r=>!r.played);
+  el.innerHTML = sorted.length? `<div class="queue">${sorted.map((r,i)=>guestRow(r,i+1)).join('')}</div>`
+    : `<div class="empty"><div class="big">🎶</div>Be the first to request a song!</div>`;
+}
+async function upvote(rid){ await sb.rpc('increment_votes',{rid}); toast('Voted! 🔥'); syncLists(); const q=document.getElementById('q'); if(q) q.focus(); }
 
-/* ---------- SONG SEARCH (Apple iTunes catalog: free, no key, CORS-enabled) ----------
+/* ---------- SONG SEARCH (Apple iTunes catalogue: free, no key, CORS-enabled) ----------
    To swap for the real Spotify Web API later: replace searchTracks() with a call to
-   /v1/search via your backend (Spotify requires a server-held client secret).        */
+   /v1/search via a small serverless function (Spotify needs a server-held secret).     */
 async function searchTracks(term,box,ev){
   try{
     const url='https://itunes.apple.com/search?media=music&entity=song&limit=12&term='+encodeURIComponent(term);
@@ -303,27 +358,25 @@ async function searchTracks(term,box,ev){
     if(!data.results||!data.results.length){ box.innerHTML='<div class="muted tiny" style="padding:8px">No matches — try another spelling.</div>'; return; }
     box.innerHTML=data.results.map(tr=>{
       const art=(tr.artworkUrl100||'').replace('100x100','200x200');
-      const name=esc(tr.trackName), artist=esc(tr.artistName);
+      const payload=JSON.stringify({trackName:tr.trackName,artist:tr.artistName,artwork:art}).replace(/"/g,'&quot;');
       return `<div class="track">
         <img src="${art}" alt="" onerror="this.style.visibility='hidden'"/>
-        <div class="info"><b>${name}</b><span>${artist}</span></div>
-        <button class="btn sm" onclick='addReq("${ev.id}",${JSON.stringify({trackName:tr.trackName,artist:tr.artistName,artwork:art}).replace(/'/g,"&#39;")})'>+ Add</button>
+        <div class="info"><b>${esc(tr.trackName)}</b><span>${esc(tr.artistName)}</span></div>
+        <button class="btn sm" onclick="addReq(JSON.parse(this.dataset.t))" data-t="${payload}">+ Add</button>
       </div>`;
     }).join('');
   }catch(e){ box.innerHTML='<div class="muted tiny" style="padding:8px">Search unavailable — check your connection.</div>'; }
 }
-function addReq(eid,track){
-  const ev=DB.events[eid];
-  const norm=s=>(s||'').toLowerCase().trim();
-  const existing=ev.requests.find(r=>norm(r.trackName)===norm(track.trackName)&&norm(r.artist)===norm(track.artist));
-  if(existing){ existing.votes++; toast('Already requested — added your vote! 🔥'); }
-  else{ ev.requests.push({id:uid(),trackName:track.trackName,artist:track.artist,artwork:track.artwork,votes:1,played:false,createdAt:Date.now()}); toast('Added to the queue! 🎶'); }
-  save(DB); render();
+async function addReq(track){
+  const ev=state.event; if(!ev) return;
+  const name=track.trackName, artist=track.artist||'';
+  const {data:existing}=await sb.from('requests').select('id')
+    .eq('event_id',ev.id).ilike('track_name',name).ilike('artist',artist).limit(1);
+  if(existing&&existing.length){ await sb.rpc('increment_votes',{rid:existing[0].id}); toast('Already requested — added your vote! 🔥'); }
+  else{ await sb.from('requests').insert({event_id:ev.id,track_name:name,artist:artist,artwork:track.artwork||''}); toast('Added to the queue! 🎶'); }
   const q=document.getElementById('q'); if(q){ q.value=''; document.getElementById('results').innerHTML=''; q.focus(); }
+  syncLists();
 }
-
-/* ---------- sort: popularity first, then earliest ---------- */
-function sortReqs(reqs){ return [...reqs].sort((a,b)=> b.votes-a.votes || a.createdAt-b.createdAt); }
 
 /* ---------- SHARE / QR ---------- */
 function showShare(ev){
@@ -332,12 +385,11 @@ function showShare(ev){
   bg.onclick=e=>{ if(e.target===bg) bg.remove(); };
   bg.innerHTML=`<div class="modal">
     <h2>Scan to request songs</h2>
-    <p class="tiny muted">Guests scan this with their phone camera.</p>
+    <p class="tiny muted">Guests scan this with their phone camera — their requests appear here live.</p>
     <div id="qrcode"></div>
     <div class="linkbox"><input id="shareLink" value="${esc(link)}" readonly/><button class="btn sm" id="copyLink">Copy</button></div>
-    <p class="tiny muted" style="margin-top:14px">Note: for phones to open this, the file needs to be hosted online (not opened from your hard drive). On this computer you can test it via the Guest view button.</p>
-    <div style="margin-top:14px"><button class="btn sec sm" onclick="this.closest('.modal-bg').remove()">Close</button>
-    <button class="btn sm" onclick="go('#${ev.id}')">Open Guest view →</button></div>
+    <div style="margin-top:16px"><button class="btn sec sm" onclick="this.closest('.modal-bg').remove()">Close</button>
+    <button class="btn sm" onclick="go('#${esc(ev.id)}')">Open Guest view →</button></div>
   </div>`;
   document.body.appendChild(bg);
   new QRCode(document.getElementById('qrcode'),{text:link,width:200,height:200,colorDark:'#15102e',colorLight:'#ffffff'});
@@ -345,57 +397,42 @@ function showShare(ev){
 }
 
 /* ---------- PDF: Top 20 unique most-requested ---------- */
-function exportPDF(ev){
+function exportPDF(ev,reqs){
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({unit:'pt',format:'a4'});
   const W=doc.internal.pageSize.getWidth();
-  const top=sortReqs(ev.requests).slice(0,20);
-  // header band
+  const top=sortReqs(reqs).slice(0,20);
   doc.setFillColor(21,16,46); doc.rect(0,0,W,90,'F');
   doc.setTextColor(255,61,139); doc.setFont('helvetica','bold'); doc.setFontSize(22);
   doc.text('Top 20 Most-Requested Songs', 40, 46);
   doc.setTextColor(180,170,220); doc.setFont('helvetica','normal'); doc.setFontSize(12);
   doc.text(`${ev.name}${ev.date?'  ·  '+ev.date:''}`, 40, 68);
-  const stamp=new Date().toLocaleString();
   doc.setFontSize(9); doc.setTextColor(150,140,190);
-  doc.text('Generated '+stamp, 40, 82);
-
-  let y=120;
-  doc.setFontSize(11);
-  if(!top.length){
-    doc.setTextColor(80,80,80); doc.text('No requests recorded for this event yet.',40,y);
-  }
+  doc.text('Generated '+new Date().toLocaleString(), 40, 82);
+  let y=120; doc.setFontSize(11);
+  if(!top.length){ doc.setTextColor(80,80,80); doc.text('No requests recorded for this event yet.',40,y); }
   top.forEach((r,i)=>{
     if(y>770){ doc.addPage(); y=60; }
-    // rank
     doc.setTextColor(124,77,255); doc.setFont('helvetica','bold'); doc.setFontSize(13);
     doc.text(String(i+1).padStart(2,'0'), 40, y);
-    // title + artist
     doc.setTextColor(30,25,55); doc.setFontSize(12);
-    doc.text(trunc(doc,r.trackName,300), 80, y);
+    doc.text(trunc(doc,r.track_name,300), 80, y);
     doc.setTextColor(120,110,150); doc.setFont('helvetica','normal'); doc.setFontSize(10);
-    doc.text(trunc(doc,r.artist,300), 80, y+14);
-    // votes
+    doc.text(trunc(doc,r.artist||'',300), 80, y+14);
     doc.setTextColor(230,150,40); doc.setFont('helvetica','bold'); doc.setFontSize(12);
     doc.text(`${r.votes} vote${r.votes!==1?'s':''}`, W-40, y, {align:'right'});
-    // divider
     doc.setDrawColor(225,222,235); doc.line(40,y+24,W-40,y+24);
     y+=40;
   });
-  const safe=ev.name.replace(/[^a-z0-9]+/gi,'_').replace(/^_|_$/g,'')||'event';
+  const safe=(ev.name||'event').replace(/[^a-z0-9]+/gi,'_').replace(/^_|_$/g,'')||'event';
   doc.save(`Top20_${safe}.pdf`);
   toast('PDF downloaded');
 }
-function trunc(doc,str,maxw){ str=str||''; while(doc.getTextWidth(str)>maxw&&str.length>3){ str=str.slice(0,-2); } return str.length<(arguments[1]||'').length?str+'…':str; }
+function trunc(doc,str,maxw){ str=str||''; const orig=str; while(doc.getTextWidth(str)>maxw&&str.length>3){ str=str.slice(0,-2); } return str.length<orig.length?str+'…':str; }
 
-/* ---------- init + seed demo on very first load ---------- */
-(function(){
-  if(!Object.keys(DB.events).length && !localStorage.getItem(KEY)){
-    // leave empty; user creates their own
-  }
-  if(!location.hash) location.hash='#/';
-  render();
-})();
+/* ---------- init ---------- */
+if(!location.hash) location.hash='#/';
+render();
 </script>
 </body>
 </html>
